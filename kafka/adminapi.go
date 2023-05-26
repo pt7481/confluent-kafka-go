@@ -2346,6 +2346,95 @@ func (a *AdminClient) AlterConsumerGroupOffsets(
 	return acgor, nil
 }
 
+type OffsetSpec int
+
+const (
+	MaxTimestampOffsetSpec = ConfigSource(C.RD_KAFKA_OFFSET_SPEC_MAX_TIMESTAMP)
+	EarliestOffsetSpec     = ConfigSource(C.RD_KAFKA_OFFSET_SPEC_EARLIEST)
+	LatestOffsetSpec       = ConfigSource(C.RD_KAFKA_OFFSET_SPEC_LATEST)
+)
+
+type ListOffsetResultInfo struct {
+	offset      int64
+	timestamp   int64
+	leaderEpoch int
+	err         error
+}
+
+func (a *AdminClient) ListOffsets(
+	ctx context.Context, requests map[TopicPartition]int,
+	options ...ListOffsetsAdminOption) (result map[TopicPartition]ListOffsetResultInfo, err error) {
+	err = a.verifyClient()
+	if err != nil {
+		return result, err
+	}
+	if len(requests) < 1 {
+		return result, fmt.Errorf(
+			"expected length of requests should be >= 1, got %d",
+			len(requests))
+	}
+	var topic_partitions *C.rd_kafka_topic_partition_list_t
+	topic_partitions = C.rd_kafka_topic_partition_list_new(len(requests))
+
+	for tp, offsetvalue := range requests {
+		var topic_partition *C.rd_kafka_topic_partition_t
+		topic_partition = C.rd_kafka_topic_partition_list_add(topic_partitions, C.CString(tp.Topic), tp.Partition)
+		topic_partition.offset = offsetvalue
+	}
+
+	// Convert Go AdminOptions (if any) to C AdminOptions.
+	genericOptions := make([]AdminOption, len(options))
+	for i := range options {
+		genericOptions[i] = options[i]
+	}
+	cOptions, err := adminOptionsSetup(
+		a.handle, C.RD_KAFKA_ADMIN_OP_LISTOFFSETS, genericOptions)
+	if err != nil {
+		return result, err
+	}
+	defer C.rd_kafka_AdminOptions_destroy(cOptions)
+
+	// Create temporary queue for async operation.
+	cQueue := C.rd_kafka_queue_new(a.handle.rk)
+	defer C.rd_kafka_queue_destroy(cQueue)
+
+	// Call rd_kafka_AlterConsumerGroupOffsets (asynchronous).
+	C.rd_kafka_ListOffsets(
+		a.handle.rk,
+		topic_partitions,
+		cOptions,
+		cQueue)
+	defer C.rd_kafka_topic_partition_list_destroy(topic_partitions)
+	// Wait for result, error or context timeout.
+	rkev, err := a.waitResult(
+		ctx, cQueue, C.RD_KAFKA_EVENT_LISTOFFSETS_RESULT)
+	if err != nil {
+		return result, err
+	}
+	defer C.rd_kafka_event_destroy(rkev)
+
+	cRes := C.rd_kafka_event_ListOffsets_result(rkev)
+
+	// Convert result from C to Go.
+	var cPartitionCount C.size_t
+	cPartitionCount := C.rd_kafka_ListOffsets_result_get_count(cRes)
+	for itr := 0; itr < cPartitionCount; itr++ {
+		cElement * C.rd_kafka_ListOffsetResultInfo
+		cPartition * C.rd_kafka_topic_partition_t
+		goValue := ListOffsetResultInfo()
+		cElement = rd_kafka_ListOffsets_result_get_element(cRes, itr)
+		cPartition = rd_kafka_ListOffsetResultInfo_get_topic_partition(cElement)
+		goPartition := Topicpartition(C.GoString(cPartition.topic), cPartition.partition)
+		goValue.offset = cPartition.offset
+		goValue.timestamp = rd_kafka_ListOffsetResultInfo_get_timestamp(cElement)
+		goValue.leaderEpoch = -1
+		goValue.err = newError(cPartition.err)
+		result[goPartition] = goValue
+	}
+
+	return result, nil
+}
+
 // NewAdminClient creats a new AdminClient instance with a new underlying client instance
 func NewAdminClient(conf *ConfigMap) (*AdminClient, error) {
 
