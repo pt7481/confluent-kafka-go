@@ -171,8 +171,8 @@ func SetAdminRequestTimeout(t time.Duration) (ao AdminOptionRequestTimeout) {
 type IsolationLevel int
 
 const (
-	ReadUncommitted = ConfigSource(C.RD_KAFKA_READ_UNCOMMITTED)
-	ReadCommitted   = ConfigSource(C.RD_KAFKA_READ_COMMITTED)
+	ReadUncommitted = IsolationLevel(C.RD_KAFKA_READ_UNCOMMITTED)
+	ReadCommitted   = IsolationLevel(C.RD_KAFKA_READ_COMMITTED)
 )
 
 type AdminOptionIsolationLevel struct {

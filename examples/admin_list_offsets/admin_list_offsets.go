@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
@@ -45,23 +44,23 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var requests map[kafka.TopicPartition]int
-	requests[kafka.TopicPartitions({Topic:"topicname",Partition : 0})] = kafka.EarliestOffsetSpec;
+	requests := make(map[kafka.TopicPartition]int64)
+	goTopic := "topicname"
+	requests[kafka.TopicPartition{Topic: &goTopic, Partition: 0}] = int64(kafka.EarliestOffsetSpec)
 
-
-	results, err := a.ListOffsets(ctx, requests,kafka.SetAdminIsolationLevel(kafka.ReadCommitted))
+	results, err := a.ListOffsets(ctx, requests, kafka.SetAdminIsolationLevel(kafka.ReadCommitted))
 	if err != nil {
 		fmt.Printf("Failed to List offsets: %v\n", err)
 		os.Exit(1)
 	}
 	// map[TopicPartition]ListOffsetResultInfo
 	// Print results
-	for tp,info := range results {
-		fmt.Printf("Topic: %s Partition_Index : %d\n",tp.Topic,tp.Partition)
-		if info.err.code {
-			fmt.Printf("	ErrorCode : %d ErrorMessage : %s\n\n",info.err.code,info.err.str)
+	for tp, info := range results {
+		fmt.Printf("Topic: %s Partition_Index : %d\n", *tp.Topic, tp.Partition)
+		if info.Err.Code() != 0 {
+			fmt.Printf("	ErrorCode : %d ErrorMessage : %s\n\n", info.Err.Code(), info.Err.String())
 		} else {
-			fmt.Prinitf("	Offset : %d Timestamp : %d\n\n",info.offset,info.timestamp)
+			fmt.Printf("	Offset : %d Timestamp : %d\n\n", info.Offset, info.Timestamp)
 		}
 	}
 

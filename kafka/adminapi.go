@@ -2349,21 +2349,22 @@ func (a *AdminClient) AlterConsumerGroupOffsets(
 type OffsetSpec int
 
 const (
-	MaxTimestampOffsetSpec = ConfigSource(C.RD_KAFKA_OFFSET_SPEC_MAX_TIMESTAMP)
-	EarliestOffsetSpec     = ConfigSource(C.RD_KAFKA_OFFSET_SPEC_EARLIEST)
-	LatestOffsetSpec       = ConfigSource(C.RD_KAFKA_OFFSET_SPEC_LATEST)
+	MaxTimestampOffsetSpec = OffsetSpec(C.RD_KAFKA_OFFSET_SPEC_MAX_TIMESTAMP)
+	EarliestOffsetSpec     = OffsetSpec(C.RD_KAFKA_OFFSET_SPEC_EARLIEST)
+	LatestOffsetSpec       = OffsetSpec(C.RD_KAFKA_OFFSET_SPEC_LATEST)
 )
 
 type ListOffsetResultInfo struct {
-	offset      int64
-	timestamp   int64
-	leaderEpoch int
-	err         Error
+	Offset      int64
+	Timestamp   int64
+	LeaderEpoch int
+	Err         Error
 }
 
 func (a *AdminClient) ListOffsets(
-	ctx context.Context, requests map[TopicPartition]int,
+	ctx context.Context, requests map[TopicPartition]int64,
 	options ...ListOffsetsAdminOption) (result map[TopicPartition]ListOffsetResultInfo, err error) {
+	result = make(map[TopicPartition]ListOffsetResultInfo)
 	err = a.verifyClient()
 	if err != nil {
 		return result, err
@@ -2374,12 +2375,12 @@ func (a *AdminClient) ListOffsets(
 			len(requests))
 	}
 	var topic_partitions *C.rd_kafka_topic_partition_list_t
-	topic_partitions = C.rd_kafka_topic_partition_list_new(len(requests))
+	topic_partitions = C.rd_kafka_topic_partition_list_new(C.int(len(requests)))
 
 	for tp, offsetvalue := range requests {
 		var topic_partition *C.rd_kafka_topic_partition_t
-		topic_partition = C.rd_kafka_topic_partition_list_add(topic_partitions, C.CString(tp.Topic), tp.Partition)
-		topic_partition.offset = offsetvalue
+		topic_partition = C.rd_kafka_topic_partition_list_add(topic_partitions, C.CString(*tp.Topic), C.int32_t(tp.Partition))
+		topic_partition.offset = C.int64_t(offsetvalue)
 	}
 
 	// Convert Go AdminOptions (if any) to C AdminOptions.
@@ -2417,18 +2418,20 @@ func (a *AdminClient) ListOffsets(
 
 	// Convert result from C to Go.
 	var cPartitionCount C.size_t
-	cPartitionCount := C.rd_kafka_ListOffsets_result_get_count(cRes)
-	for itr := 0; itr < cPartitionCount; itr++ {
-		cElement * C.rd_kafka_ListOffsetResultInfo
-		cPartition * C.rd_kafka_topic_partition_t
-		goValue := ListOffsetResultInfo()
-		cElement = rd_kafka_ListOffsets_result_get_element(cRes, itr)
-		cPartition = rd_kafka_ListOffsetResultInfo_get_topic_partition(cElement)
-		goPartition := Topicpartition(C.GoString(cPartition.topic), cPartition.partition)
-		goValue.offset = cPartition.offset
-		goValue.timestamp = rd_kafka_ListOffsetResultInfo_get_timestamp(cElement)
-		goValue.leaderEpoch = -1
-		goValue.err = newError(cPartition.err)
+	cPartitionCount = C.rd_kafka_ListOffsets_result_get_count(cRes)
+	for itr := 0; itr < int(cPartitionCount); itr++ {
+		var cElement *C.rd_kafka_ListOffsetResultInfo_t
+		var cPartition *C.rd_kafka_topic_partition_t
+		var goTopic string
+		goValue := ListOffsetResultInfo{}
+		cElement = C.rd_kafka_ListOffsets_result_get_element(cRes, C.size_t(itr))
+		cPartition = C.rd_kafka_ListOffsetResultInfo_get_topic_partition(cElement)
+		goTopic = C.GoString(cPartition.topic)
+		goPartition := TopicPartition{Topic: &goTopic, Partition: int32(cPartition.partition)}
+		goValue.Offset = int64(cPartition.offset)
+		goValue.Timestamp = int64(C.rd_kafka_ListOffsetResultInfo_get_timestamp(cElement))
+		goValue.LeaderEpoch = -1
+		goValue.Err = newError(cPartition.err)
 		result[goPartition] = goValue
 	}
 
