@@ -2358,7 +2358,7 @@ type ListOffsetResultInfo struct {
 	offset      int64
 	timestamp   int64
 	leaderEpoch int
-	err         error
+	err         Error
 }
 
 func (a *AdminClient) ListOffsets(
