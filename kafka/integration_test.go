@@ -2493,7 +2493,7 @@ func (its *IntegrationTestSuite) TestListOffsets() {
 			t.Fatalf("Error code should be 0 and offset should be 3, instead Error code is %d and Offset is %d\n", info.Err.Code(), info.Offset)
 		}
 	}
-	requests[tp1] = int64(EarliestOffsetSpec)
+	requests[tp1] = int64(MaxTimestampOffsetSpec)
 	results, err = a.ListOffsets(ctx, requests, SetAdminIsolationLevel(ReadCommitted))
 	if err != nil {
 		t.Fatalf("Unable to ListOffsets, error : %s", err)

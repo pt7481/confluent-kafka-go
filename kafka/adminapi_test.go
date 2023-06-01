@@ -556,6 +556,22 @@ func testAdminAPIsAlterConsumerGroupOffsets(
 	}
 }
 
+func testAdminAPIsListOffsets(
+	what string, a *AdminClient, expDuration time.Duration, t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), expDuration)
+	defer cancel()
+	requests := make(map[TopicPartition]int64)
+	goTopic := "topicname"
+	tp1 := TopicPartition{Topic: &goTopic, Partition: 0}
+	requests[tp1] = -10
+	_, err := a.ListOffsets(ctx, requests, SetAdminIsolationLevel(ReadCommitted))
+	if err == nil {
+		t.Fatalf("Error should not be nil as the int64 does not correspond to a valid timestamp or OffsetSpec Enum\n")
+	}
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Fatalf("Expected DeadlineExceeded, not %v", ctx.Err())
+	}
+}
 func testAdminAPIs(what string, a *AdminClient, t *testing.T) {
 	t.Logf("AdminClient API testing on %s: %s", a, what)
 
@@ -792,6 +808,8 @@ func testAdminAPIs(what string, a *AdminClient, t *testing.T) {
 
 	testAdminAPIsListConsumerGroupOffsets(what, a, expDuration, t)
 	testAdminAPIsAlterConsumerGroupOffsets(what, a, expDuration, t)
+
+	testAdminAPIsListOffsets(what, a, expDuration, t)
 }
 
 // TestAdminAPIs dry-tests most Admin APIs, no broker is needed.
