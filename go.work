@@ -1,0 +1,9 @@
+go 1.20
+
+use (
+	.
+	./examples
+	./examples/docker_aws_lambda_example
+	./kafkatest
+	./soaktest
+)
